@@ -7,7 +7,6 @@ import (
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/kinesis"
-	"github.com/golang/glog"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/net/context"
 )
@@ -24,6 +23,10 @@ type streamContext struct {
 type DataPoint struct {
 	X string `json:"x"`
 	Y string `json:"y"`
+}
+
+func streams(client *Client, data interface{}) {
+
 }
 
 func connected(client *Client, data interface{}) {
@@ -44,8 +47,8 @@ func streamData(client *Client, data interface{}) {
 		client.send <- MessageToClient{"error", err.Error()}
 		return
 	}
-	ksis := initKinesisClient()
-	streamDescription := waitForActive(ksis, req.Stream)
+	ksis := initKinesisClient(client)
+	streamDescription := waitForActive(client, ksis, req.Stream)
 	sctx := &streamContext{
 		ctx:          client.ctx,
 		recordStream: make(chan []byte, 5000),
@@ -81,23 +84,23 @@ func decodeDataPoint(client *Client, data []byte) *DataPoint {
 	return &dp
 }
 
-func initKinesisClient() *kinesis.Kinesis {
+func initKinesisClient(client *Client) *kinesis.Kinesis {
 	awsRegion := aws.Regions[strings.ToLower(AwsRegion)]
 	auth, err := aws.EnvAuth()
 	if err != nil {
-		glog.Errorf("Unable to authenticate with AWS %v\n", err)
+		client.Errorf("Unable to authenticate with AWS %v\n", err)
 	}
 	return kinesis.New(auth, awsRegion)
 }
 
-func waitForActive(ksis *kinesis.Kinesis, streamName string) *kinesis.StreamDescription {
+func waitForActive(client *Client, ksis *kinesis.Kinesis, streamName string) *kinesis.StreamDescription {
 	streamDescription := &kinesis.StreamDescription{}
 	for {
 		streamDescription, _ = ksis.DescribeStream(streamName)
 		if streamDescription.StreamStatus == kinesis.StreamStatusActive {
 			break
 		} else {
-			glog.Infof("Stream status is %s\n", streamDescription.StreamStatus)
+			client.Infof("Stream status is %s\n", streamDescription.StreamStatus)
 			time.Sleep(4 * time.Second)
 		}
 	}
