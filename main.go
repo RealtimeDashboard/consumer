@@ -2,27 +2,25 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
+	"os"
+
+	"github.com/golang/glog"
 )
 
 var (
-	//StreamName string
 	AwsRegion string
 	port      string
 )
 
 func init() {
-	//flag.StringVar(&StreamName, "stream-name", "ChimeMetricStream", "your stream name")
-	flag.StringVar(&AwsRegion, "aws-region", "us-west-2", "your AWS region")
-	flag.StringVar(&port, "port", "8000", "server port")
+	AwsRegion = os.Getenv("AWS_REGION")
+	flag.StringVar(&port, "port", "8080", "server port")
 	flag.Parse()
 }
 
 func main() {
-	flag.Parse()
-
-	fmt.Println("listening on " + port)
+	glog.Infof("listening on %s", port)
 	router := NewRouter()
 	router.Handle("open", connected)
 	router.Handle("stream_data", streamData)

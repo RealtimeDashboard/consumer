@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 )
 
@@ -28,7 +29,7 @@ func NewRouter() *Router {
 }
 
 func (e *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("serving now")
+	glog.Info("serving now")
 	socket, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

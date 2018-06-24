@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -29,7 +27,7 @@ type DataPoint struct {
 }
 
 func connected(client *Client, data interface{}) {
-	fmt.Println("connected")
+	client.Infof("connected")
 	client.send <- MessageToClient{
 		Name: "connection_open",
 		Data: nil,
@@ -37,7 +35,7 @@ func connected(client *Client, data interface{}) {
 }
 
 func streamData(client *Client, data interface{}) {
-	fmt.Println("streaming data")
+	client.Infof("streaming data")
 	// data interface would have the name of the stream from the client
 	// start streaming data from that stream
 	var req StreamReq
@@ -53,7 +51,7 @@ func streamData(client *Client, data interface{}) {
 		recordStream: make(chan []byte, 5000),
 	}
 	for _, shard := range streamDescription.Shards {
-		reader := NewStreamReader(ksis, req.Stream, shard.ShardId)
+		reader := NewStreamReader(client, ksis, req.Stream, shard.ShardId)
 		go reader.StreamRecords(sctx)
 	}
 	sendRecordsToClient(client, sctx)
@@ -63,7 +61,7 @@ func sendRecordsToClient(client *Client, sctx *streamContext) {
 	for {
 		select {
 		case record := <-sctx.recordStream:
-			dp := decodeDataPoint(record)
+			dp := decodeDataPoint(client, record)
 			client.send <- MessageToClient{
 				Name: "update_data",
 				Data: dp,
@@ -74,11 +72,11 @@ func sendRecordsToClient(client *Client, sctx *streamContext) {
 	}
 }
 
-func decodeDataPoint(data []byte) *DataPoint {
+func decodeDataPoint(client *Client, data []byte) *DataPoint {
 	var dp DataPoint
 	err := json.Unmarshal(data, &dp)
 	if err != nil {
-		log.Fatal(err)
+		client.Errorf("%v", err)
 	}
 	return &dp
 }
@@ -87,7 +85,7 @@ func initKinesisClient() *kinesis.Kinesis {
 	awsRegion := aws.Regions[strings.ToLower(AwsRegion)]
 	auth, err := aws.EnvAuth()
 	if err != nil {
-		glog.Fatalf("Unable to authenticate with AWS %v\n", err)
+		glog.Errorf("Unable to authenticate with AWS %v\n", err)
 	}
 	return kinesis.New(auth, awsRegion)
 }
