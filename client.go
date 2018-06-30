@@ -9,7 +9,7 @@ import (
 )
 
 type MessageToClient struct {
-	Name string      `json:"name"`
+	Name string      `json:"Name"`
 	Data interface{} `json:"data"`
 }
 
@@ -23,6 +23,8 @@ type Client struct {
 	cancel       context.CancelFunc
 	Id           uuid.UUID
 	Subsciptions map[Stream]chan []byte
+	contextMap   map[Stream]*context.Context
+	cancelMap    map[Stream]context.CancelFunc
 }
 
 func (c *Client) String() string {
@@ -73,12 +75,17 @@ func NewClient(socket *websocket.Conn, findHandler FindHandler) *Client {
 		cancel:       cancel,
 		Id:           uid,
 		Subsciptions: make(map[Stream]chan []byte),
+		contextMap:   make(map[Stream]*context.Context),
+		cancelMap:    make(map[Stream]context.CancelFunc),
 	}
 }
 
 func (c *Client) Subscribe(stream Stream) {
 	channel := make(chan []byte, 10)
 	c.Subsciptions[stream] = channel
+	ctx, cancel := context.WithCancel(context.Background())
+	c.contextMap[stream] = &ctx
+	c.cancelMap[stream] = cancel
 	var sub subscriber
 	sub = c
 	ds.subChan <- SubscriptionMessage{
@@ -89,6 +96,9 @@ func (c *Client) Subscribe(stream Stream) {
 
 func (c *Client) Unsubscribe(stream Stream) {
 	//close(c.Subsciptions[stream])
+	delete(c.contextMap, stream)
+	c.cancelMap[stream]()
+	delete(c.cancelMap, stream)
 	delete(c.Subsciptions, stream)
 	var sub subscriber
 	sub = c

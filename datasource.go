@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"strings"
 	"time"
 
@@ -18,10 +17,14 @@ type Stream interface {
 	String() string
 }
 
-type StreamImpl string
+type StreamImpl struct {
+	Name   string     `json:"name"`
+	Region RegionName `json:"region"`
+}
 
-func (s StreamImpl) start() {
-	streamDescription := ds.kinesis.waitUntilStreamActive(s)
+func (s *StreamImpl) start() {
+	ksis := ds.kinesisMap[s.Region]
+	streamDescription := ksis.waitUntilStreamActive(s)
 	ctx, cancel := context.WithCancel(context.Background())
 	sctx := &streamContext{
 		ctx:          &ctx,
@@ -29,13 +32,13 @@ func (s StreamImpl) start() {
 	}
 	ds.cancelStream[s] = cancel
 	for _, shard := range streamDescription.Shards {
-		reader := NewStreamReader((*kinesis.Kinesis)(ds.kinesis), s, shard.ShardId)
+		reader := NewStreamReader((*kinesis.Kinesis)(ksis), s, shard.ShardId)
 		go reader.StreamRecords(sctx)
 	}
 }
 
-func (s StreamImpl) String() string {
-	return string(s)
+func (s *StreamImpl) String() string {
+	return s.Name
 }
 
 //------------ subscriber ------------
@@ -132,8 +135,10 @@ type SubscriptionMessage struct {
 	subscriber *subscriber
 }
 
+type RegionName string
+
 type DataSource struct {
-	kinesis       *KinesisClient
+	kinesisMap    map[RegionName]*KinesisClient
 	subscriptions subscriptions
 	subChan       chan SubscriptionMessage
 	unsubChan     chan SubscriptionMessage
@@ -166,13 +171,20 @@ func (ds *DataSource) publish(message *RecordMessage) {
 }
 
 func InitDataSource() *DataSource {
-	ksis := newKinesisClient()
+	kmap := make(map[RegionName]*KinesisClient)
+	for k, v := range aws.Regions {
+		if strings.Contains(k, "gov") {
+			continue
+		}
+		ksis := newKinesisClient(&v)
+		kmap[RegionName(k)] = ksis
+	}
 	return &DataSource{
-		kinesis:       ksis,
+		kinesisMap:    kmap,
 		subscriptions: make(map[Stream]*subscribers),
-		subChan:       make(chan SubscriptionMessage),
-		unsubChan:     make(chan SubscriptionMessage),
-		recordStream:  make(chan RecordMessage),
+		subChan:       make(chan SubscriptionMessage, 10),
+		unsubChan:     make(chan SubscriptionMessage, 10),
+		recordStream:  make(chan RecordMessage, 50),
 		cancelStream:  make(map[Stream]context.CancelFunc),
 	}
 }
@@ -181,13 +193,12 @@ func InitDataSource() *DataSource {
 
 type KinesisClient kinesis.Kinesis
 
-func newKinesisClient() *KinesisClient {
-	awsRegion := aws.Regions[strings.ToLower(os.Getenv("AWS_REGION"))]
+func newKinesisClient(awsRegion *aws.Region) *KinesisClient {
 	auth, err := aws.EnvAuth()
 	if err != nil {
 		glog.Errorf("Unable to authenticate with AWS %v\n", err)
 	}
-	client := KinesisClient(*kinesis.New(auth, awsRegion))
+	client := KinesisClient(*kinesis.New(auth, *awsRegion))
 	return &client
 }
 

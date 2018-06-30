@@ -20,10 +20,10 @@ var (
 func init() {
 	flag.StringVar(&port, "port", "8080", "server port")
 	flag.Parse()
-	ds = InitDataSource()
 }
 
 func main() {
+	ds = InitDataSource()
 	glog.Infof("listening on %s", port)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -34,6 +34,9 @@ func main() {
 	router := NewRouter()
 	router.Handle("open", connected)
 	router.Handle("stream_data", streamData)
+	router.Handle("subscribe", subscribe)
+	router.Handle("unsubscribe", unsubscribe)
+	router.Handle("list_streams", listStreams)
 	http.Handle("/", router)
 	http.ListenAndServe(":"+port, nil)
 }

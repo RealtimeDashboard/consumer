@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/golang/glog"
@@ -76,11 +77,28 @@ func TestSubscriptionMultipleSubscribe(t *testing.T) {
 	}
 }
 
+func TestMultipleSubsForSameStream(t *testing.T) {
+	var ds subscriptions
+	ds = make(map[Stream]*subscribers)
+	s1 := testSubscriber()
+	s2 := testSubscriber()
+	stream1 := MockStream("1")
+	stream2 := MockStream("1")
+	ds.subscribe(stream1, &s1)
+	ds.subscribe(stream2, &s2)
+	stream3 := MockStream("1")
+	if len(ds[stream3].subs) != 2 {
+		t.Fatal("incorrect number of subscribers")
+	}
+}
+
 func testSubscriber() subscriber {
 	id := uuid.Must(uuid.NewV4())
 	c := Client{
 		Id:           id,
 		Subsciptions: make(map[Stream]chan []byte),
+		contextMap:   make(map[Stream]*context.Context),
+		cancelMap:    make(map[Stream]context.CancelFunc),
 	}
 	return &c
 }
