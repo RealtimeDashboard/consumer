@@ -8,6 +8,11 @@ import (
 	"github.com/satori/go.uuid"
 )
 
+const (
+	CLIENT_OUT_MESSAGE_BUFFER = 50
+	CLIENT_IN_MESSAGE_BUFFER  = 50
+)
+
 type MessageToClient struct {
 	Name string      `json:"Name"`
 	Data interface{} `json:"data"`
@@ -68,7 +73,7 @@ func NewClient(socket *websocket.Conn, findHandler FindHandler) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	uid := uuid.Must(uuid.NewV4())
 	return &Client{
-		send:         make(chan MessageToClient),
+		send:         make(chan MessageToClient, CLIENT_OUT_MESSAGE_BUFFER),
 		socket:       socket,
 		findHandler:  findHandler,
 		ctx:          &ctx,
@@ -81,7 +86,7 @@ func NewClient(socket *websocket.Conn, findHandler FindHandler) *Client {
 }
 
 func (c *Client) Subscribe(stream Stream) {
-	channel := make(chan []byte, 10)
+	channel := make(chan []byte, CLIENT_IN_MESSAGE_BUFFER)
 	c.Subsciptions[stream] = channel
 	ctx, cancel := context.WithCancel(context.Background())
 	c.contextMap[stream] = &ctx
@@ -95,7 +100,6 @@ func (c *Client) Subscribe(stream Stream) {
 }
 
 func (c *Client) Unsubscribe(stream Stream) {
-	//close(c.Subsciptions[stream])
 	delete(c.contextMap, stream)
 	c.cancelMap[stream]()
 	delete(c.cancelMap, stream)

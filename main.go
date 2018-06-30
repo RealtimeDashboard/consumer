@@ -33,7 +33,6 @@ func main() {
 
 	router := NewRouter()
 	router.Handle("open", connected)
-	router.Handle("stream_data", streamData)
 	router.Handle("subscribe", subscribe)
 	router.Handle("unsubscribe", unsubscribe)
 	router.Handle("list_streams", listStreams)

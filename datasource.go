@@ -10,6 +10,12 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	SUBSCRIBE_CHAN_BUFFER   = 10
+	UNSUBSCRIBE_CHAN_BUFFER = 10
+	RECORD_STREAM_BUFFER    = 50
+)
+
 //------------ Stream ------------
 
 type Stream interface {
@@ -182,9 +188,9 @@ func InitDataSource() *DataSource {
 	return &DataSource{
 		kinesisMap:    kmap,
 		subscriptions: make(map[Stream]*subscribers),
-		subChan:       make(chan SubscriptionMessage, 10),
-		unsubChan:     make(chan SubscriptionMessage, 10),
-		recordStream:  make(chan RecordMessage, 50),
+		subChan:       make(chan SubscriptionMessage, SUBSCRIBE_CHAN_BUFFER),
+		unsubChan:     make(chan SubscriptionMessage, UNSUBSCRIBE_CHAN_BUFFER),
+		recordStream:  make(chan RecordMessage, RECORD_STREAM_BUFFER),
 		cancelStream:  make(map[Stream]context.CancelFunc),
 	}
 }

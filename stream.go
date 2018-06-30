@@ -8,14 +8,17 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	GET_RECORD_LIMIT            = 100
+	TIME_BETWEEN_MULTIPLE_READS = 200 * time.Millisecond
+)
+
 type Reader struct {
 	kinesis.Kinesis
 	stream       Stream
 	shardId      string
 	iteratorType kinesis.ShardIteratorType
 }
-
-var recordLimit = 100
 
 type streamContext struct {
 	ctx          *context.Context
@@ -34,8 +37,8 @@ func (r *Reader) StreamRecords(sctx *streamContext) {
 		case <-(*sctx.ctx).Done():
 			return
 		default:
-			records, err := r.Kinesis.GetRecords(shardIterator, recordLimit)
-			time.Sleep(time.Duration(200 * time.Millisecond))
+			records, err := r.Kinesis.GetRecords(shardIterator, GET_RECORD_LIMIT)
+			time.Sleep(TIME_BETWEEN_MULTIPLE_READS)
 			if err != nil {
 				glog.Errorf("%v", err)
 				time.Sleep(time.Duration(1 * time.Second))
