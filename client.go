@@ -16,12 +16,17 @@ type MessageToClient struct {
 type FindHandler func(string) (Handler, bool)
 
 type Client struct {
-	id          uuid.UUID
-	send        chan MessageToClient
-	socket      *websocket.Conn
-	findHandler FindHandler
-	ctx         *context.Context
-	cancel      context.CancelFunc
+	send         chan MessageToClient
+	socket       *websocket.Conn
+	findHandler  FindHandler
+	ctx          *context.Context
+	cancel       context.CancelFunc
+	Id           uuid.UUID
+	Subsciptions map[Stream]chan []byte
+}
+
+func (c *Client) String() string {
+	return string(c.Id[:len(c.Id)])
 }
 
 func (client *Client) Write() {
@@ -51,6 +56,9 @@ func (client *Client) Read() {
 
 func (client *Client) Close() {
 	client.cancel()
+	for stream, _ := range client.Subsciptions {
+		client.Unsubscribe(stream)
+	}
 	close(client.send)
 }
 
@@ -58,12 +66,35 @@ func NewClient(socket *websocket.Conn, findHandler FindHandler) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	uid := uuid.Must(uuid.NewV4())
 	return &Client{
-		id:          uid,
-		send:        make(chan MessageToClient),
-		socket:      socket,
-		findHandler: findHandler,
-		ctx:         &ctx,
-		cancel:      cancel,
+		send:         make(chan MessageToClient),
+		socket:       socket,
+		findHandler:  findHandler,
+		ctx:          &ctx,
+		cancel:       cancel,
+		Id:           uid,
+		Subsciptions: make(map[Stream]chan []byte),
+	}
+}
+
+func (c *Client) Subscribe(stream Stream) {
+	channel := make(chan []byte, 10)
+	c.Subsciptions[stream] = channel
+	var sub subscriber
+	sub = c
+	ds.subChan <- SubscriptionMessage{
+		stream:     stream,
+		subscriber: &sub,
+	}
+}
+
+func (c *Client) Unsubscribe(stream Stream) {
+	//close(c.Subsciptions[stream])
+	delete(c.Subsciptions, stream)
+	var sub subscriber
+	sub = c
+	ds.unsubChan <- SubscriptionMessage{
+		stream:     stream,
+		subscriber: &sub,
 	}
 }
 
@@ -75,16 +106,16 @@ type Logger interface {
 }
 
 func (c *Client) Infof(format string, args ...interface{}) {
-	glog.Infof(withId(format), c.id, args)
+	glog.Infof(withId(format), c.Id, args)
 }
 func (c *Client) Warningf(format string, args ...interface{}) {
-	glog.Warningf(withId(format), c.id, args)
+	glog.Warningf(withId(format), c.Id, args)
 }
 func (c *Client) Errorf(format string, args ...interface{}) {
-	glog.Errorf(withId(format), c.id, args)
+	glog.Errorf(withId(format), c.Id, args)
 }
 func (c *Client) Fatalf(format string, args ...interface{}) {
-	glog.Fatalf(withId(format), c.id, args)
+	glog.Fatalf(withId(format), c.Id, args)
 }
 
 func withId(format string) string {
